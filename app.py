@@ -296,7 +296,91 @@ def cluster_names():
     return jsonify({"proposals": proposals})
 
 
-@app.route('/segment', methods=['POST'])
+@app.route('/analyze-chunk', methods=['POST'])
+def analyze_chunk():
+    """
+    Analiza un subconjunto de meshes del GLB (chunk).
+    Recibe: glb_url, chunk_index, chunk_size (default 20)
+    Retorna: summaries del chunk + total_meshes para saber cuántos chunks hay
+    
+    El cliente llama este endpoint múltiples veces con chunk_index=0,1,2...
+    hasta cubrir todos los meshes. Luego combina y llama /classify.
+    """
+    data = request.get_json(silent=True) or {}
+    glb_url    = data.get("glb_url")
+    chunk_idx  = data.get("chunk_index", 0)
+    chunk_size = data.get("chunk_size", 20)
+
+    if not glb_url:
+        return jsonify({"error": "glb_url requerida"}), 400
+
+    # Descargar GLB
+    try:
+        with urllib.request.urlopen(glb_url, timeout=25) as resp:
+            glb_bytes = resp.read()
+    except Exception as e:
+        return jsonify({"error": f"No se pudo descargar: {str(e)}"}), 400
+
+    # Cargar
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".glb", delete=False) as tmp:
+            tmp.write(glb_bytes)
+            tmp_path = tmp.name
+        scene = trimesh.load(tmp_path)
+        os.unlink(tmp_path)
+    except Exception as e:
+        return jsonify({"error": f"Error al cargar GLB: {str(e)}"}), 422
+
+    # Extraer meshes
+    if isinstance(scene, trimesh.Scene):
+        all_meshes = {n: g for n, g in scene.geometry.items() if isinstance(g, trimesh.Trimesh)}
+    elif isinstance(scene, trimesh.Trimesh):
+        all_meshes = {"Mesh_000": scene}
+    else:
+        return jsonify({"error": "Formato no soportado"}), 422
+
+    mesh_names = list(all_meshes.keys())
+    total      = len(mesh_names)
+
+    # Calcular rango del chunk
+    start = chunk_idx * chunk_size
+    end   = min(start + chunk_size, total)
+
+    if start >= total:
+        return jsonify({
+            "status":       "ok",
+            "chunk_index":  chunk_idx,
+            "chunk_size":   chunk_size,
+            "total_meshes": total,
+            "total_chunks": math.ceil(total / chunk_size),
+            "is_last":      True,
+            "summaries":    []
+        })
+
+    chunk_names  = mesh_names[start:end]
+    summaries    = []
+
+    for name in chunk_names:
+        try:
+            s = mesh_summary(name, all_meshes[name])
+            summaries.append(s)
+        except Exception as e:
+            summaries.append({"name": name, "error": str(e)})
+
+    total_chunks = math.ceil(total / chunk_size)
+    is_last      = (chunk_idx + 1) >= total_chunks
+
+    return jsonify({
+        "status":       "ok",
+        "chunk_index":  chunk_idx,
+        "chunk_size":   chunk_size,
+        "total_meshes": total,
+        "total_chunks": total_chunks,
+        "is_last":      is_last,
+        "summaries":    summaries
+    })
+
+
 def segment():
     """
     Recibe GLB con meshes sin nombre o todo en una sola pieza.
