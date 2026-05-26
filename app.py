@@ -1,11 +1,12 @@
 import os, io, json, math, tempfile, urllib.request
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask import make_response
 import trimesh
 import numpy as np
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=['*'], methods=['GET','POST','OPTIONS'], allow_headers=['Content-Type','Authorization'])
 
 MAX_FILE_MB = 150
 NEIGHBOR_THRESHOLD = 0.05  # metros — meshes a menos de 5cm se consideran vecinos
@@ -171,7 +172,8 @@ def analyze():
 
     # Descargar GLB
     try:
-        with urllib.request.urlopen(glb_url, timeout=60) as resp:
+        req = urllib.request.Request(glb_url, headers={"User-Agent": "Mozilla/5.0 (compatible; ENGRAVIS/1.0)"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
             size_mb = int(resp.headers.get("Content-Length", 0)) / (1024 * 1024)
             if size_mb > MAX_FILE_MB:
                 return jsonify({"error": f"Archivo supera {MAX_FILE_MB}MB"}), 413
@@ -316,7 +318,8 @@ def analyze_chunk():
 
     # Descargar GLB
     try:
-        with urllib.request.urlopen(glb_url, timeout=25) as resp:
+        req = urllib.request.Request(glb_url, headers={"User-Agent": "Mozilla/5.0 (compatible; ENGRAVIS/1.0)"})
+        with urllib.request.urlopen(req, timeout=25) as resp:
             glb_bytes = resp.read()
     except Exception as e:
         return jsonify({"error": f"No se pudo descargar: {str(e)}"}), 400
@@ -399,7 +402,8 @@ def segment():
 
     # Descargar GLB
     try:
-        with urllib.request.urlopen(glb_url, timeout=60) as resp:
+        req = urllib.request.Request(glb_url, headers={"User-Agent": "Mozilla/5.0 (compatible; ENGRAVIS/1.0)"})
+        with urllib.request.urlopen(req, timeout=60) as resp:
             glb_bytes = resp.read()
     except Exception as e:
         return jsonify({"error": f"No se pudo descargar: {str(e)}"}), 400
