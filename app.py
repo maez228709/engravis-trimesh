@@ -244,58 +244,402 @@ def analyze():
         "clusters": clusters
     })
 
+# ── BASE DE DATOS NAVAL SWBS ─────────────────────────────────────────────────
+# Basada en MIL-STD-1629 Ship Work Breakdown Structure + conocimiento naval
+# Cada componente tiene: orientación típica, posición relativa (Z norm),
+# rango de área, extensión longitudinal/transversal, y palabras clave.
+# Z normalizado: 0.0 = fondo del buque, 1.0 = cubierta más alta
+
+NAVAL_SWBS_DB = [
+    # ── GRUPO 100 — ESTRUCTURA DEL CASCO ─────────────────────────────────
+    {
+        "swbs": "100", "codigo": "100-01", "nombre": "Fondo del Casco",
+        "orientacion": ["horizontal"], "z_norm": (0.0, 0.2),
+        "area_min": 15, "area_max": 999, "extension": "longitudinal",
+        "aspect_xy_min": 3, "description": "Plancha de fondo, quilla plana, quilla de cajón"
+    },
+    {
+        "swbs": "100", "codigo": "100-02", "nombre": "Quilla",
+        "orientacion": ["vertical", "horizontal"], "z_norm": (0.0, 0.1),
+        "area_min": 0.5, "area_max": 15, "extension": "longitudinal",
+        "aspect_xy_min": 8, "description": "Barra de quilla, quilla de cajón central"
+    },
+    {
+        "swbs": "100", "codigo": "100-03", "nombre": "Costado de Casco — Babor",
+        "orientacion": ["vertical", "curved"], "z_norm": (0.1, 0.9),
+        "area_min": 10, "area_max": 999, "extension": "longitudinal",
+        "posicion_y": "negativo", "description": "Forro lateral babor, tracas de costado"
+    },
+    {
+        "swbs": "100", "codigo": "100-04", "nombre": "Costado de Casco — Estribor",
+        "orientacion": ["vertical", "curved"], "z_norm": (0.1, 0.9),
+        "area_min": 10, "area_max": 999, "extension": "longitudinal",
+        "posicion_y": "positivo", "description": "Forro lateral estribor, tracas de costado"
+    },
+    {
+        "swbs": "100", "codigo": "100-05", "nombre": "Cuadernas / Varenga",
+        "orientacion": ["vertical"], "z_norm": (0.0, 0.5),
+        "area_min": 0.2, "area_max": 4, "extension": "transversal",
+        "aspect_xy_min": 0, "aspect_xy_max": 1.5,
+        "description": "Cuadernas transversales, varengas de fondo"
+    },
+    {
+        "swbs": "100", "codigo": "100-06", "nombre": "Mamparo Transversal",
+        "orientacion": ["vertical"], "z_norm": (0.0, 1.0),
+        "area_min": 3, "area_max": 999, "extension": "transversal",
+        "aspect_xy_max": 2, "description": "Mamparos estancos y estructurales transversales"
+    },
+    {
+        "swbs": "100", "codigo": "100-07", "nombre": "Mamparo Longitudinal",
+        "orientacion": ["vertical"], "z_norm": (0.0, 1.0),
+        "area_min": 3, "area_max": 999, "extension": "longitudinal",
+        "aspect_xy_min": 3, "description": "Mamparos longitudinales, crujía"
+    },
+    {
+        "swbs": "100", "codigo": "100-08", "nombre": "Refuerzo Longitudinal / Eslora",
+        "orientacion": ["horizontal", "vertical"], "z_norm": (0.0, 0.5),
+        "area_min": 0.1, "area_max": 3, "extension": "longitudinal",
+        "aspect_xy_min": 5, "description": "Esloras, palmejares, refuerzos longitudinales de fondo"
+    },
+    {
+        "swbs": "100", "codigo": "100-09", "nombre": "Proa / Roda",
+        "orientacion": ["vertical", "curved"], "z_norm": (0.2, 1.0),
+        "area_min": 1, "area_max": 30, "extension": "transversal",
+        "posicion_x": "extremo_proa", "description": "Estructura de proa, roda, bulbo de proa"
+    },
+    {
+        "swbs": "100", "codigo": "100-10", "nombre": "Popa / Espejo",
+        "orientacion": ["vertical", "curved"], "z_norm": (0.0, 1.0),
+        "area_min": 1, "area_max": 30, "extension": "transversal",
+        "posicion_x": "extremo_popa", "description": "Espejo de popa, codaste, estructura de popa"
+    },
+    {
+        "swbs": "100", "codigo": "100-11", "nombre": "Doble Fondo",
+        "orientacion": ["horizontal"], "z_norm": (0.0, 0.25),
+        "area_min": 5, "area_max": 999, "extension": "longitudinal",
+        "description": "Forro interior de doble fondo, tanques estructurales"
+    },
+    {
+        "swbs": "100", "codigo": "100-12", "nombre": "Túnel de Hélice",
+        "orientacion": ["curved"], "z_norm": (0.0, 0.3),
+        "area_min": 1, "area_max": 20, "extension": "longitudinal",
+        "posicion_x": "popa", "description": "Túnel de hélice, bocina, tubo de bocina"
+    },
+    # ── GRUPO 200 — PROPULSIÓN ────────────────────────────────────────────
+    {
+        "swbs": "200", "codigo": "200-01", "nombre": "Hélice",
+        "orientacion": ["curved"], "z_norm": (0.0, 0.2),
+        "area_min": 0.1, "area_max": 8, "extension": "ninguna",
+        "posicion_x": "popa", "description": "Hélice propulsora, paso fijo o variable"
+    },
+    {
+        "swbs": "200", "codigo": "200-02", "nombre": "Eje de Propulsión",
+        "orientacion": ["horizontal"], "z_norm": (0.0, 0.2),
+        "area_min": 0.05, "area_max": 2, "extension": "longitudinal",
+        "aspect_xy_min": 6, "posicion_x": "popa",
+        "description": "Línea de ejes, acoplamiento, bocina"
+    },
+    {
+        "swbs": "200", "codigo": "200-03", "nombre": "Motor Principal",
+        "orientacion": ["horizontal", "curved"], "z_norm": (0.05, 0.4),
+        "area_min": 1, "area_max": 20,
+        "posicion_x": "popa", "description": "Motor diésel principal, bloque motor"
+    },
+    {
+        "swbs": "200", "codigo": "200-04", "nombre": "Chumaceras / Soportes de Eje",
+        "orientacion": ["horizontal"], "z_norm": (0.0, 0.2),
+        "area_min": 0.01, "area_max": 0.5, "extension": "ninguna",
+        "description": "Chumaceras, soportes intermedios de línea de ejes"
+    },
+    # ── GRUPO 300 — GOBIERNO ──────────────────────────────────────────────
+    {
+        "swbs": "300", "codigo": "300-01", "nombre": "Timón",
+        "orientacion": ["vertical"], "z_norm": (0.0, 0.6),
+        "area_min": 0.3, "area_max": 15,
+        "posicion_x": "extremo_popa", "aspect_xy_max": 1.5,
+        "description": "Pala de timón, timón compensado o no compensado"
+    },
+    {
+        "swbs": "300", "codigo": "300-02", "nombre": "Mecha de Timón",
+        "orientacion": ["vertical"], "z_norm": (0.3, 0.8),
+        "area_min": 0.01, "area_max": 0.5,
+        "posicion_x": "extremo_popa", "description": "Mecha, pinzote, soporte de timón"
+    },
+    # ── GRUPO 400 — CUBIERTA ──────────────────────────────────────────────
+    {
+        "swbs": "400", "codigo": "400-01", "nombre": "Cubierta Principal",
+        "orientacion": ["horizontal"], "z_norm": (0.75, 1.0),
+        "area_min": 10, "area_max": 999, "extension": "longitudinal",
+        "description": "Forro de cubierta principal, planchas de cubierta"
+    },
+    {
+        "swbs": "400", "codigo": "400-02", "nombre": "Cubierta Intermedia",
+        "orientacion": ["horizontal"], "z_norm": (0.35, 0.75),
+        "area_min": 5, "area_max": 999, "extension": "longitudinal",
+        "description": "Cubiertas interiores, sollados, cubiertas de bodega"
+    },
+    {
+        "swbs": "400", "codigo": "400-03", "nombre": "Baos de Cubierta",
+        "orientacion": ["horizontal"], "z_norm": (0.7, 1.0),
+        "area_min": 0.1, "area_max": 3, "extension": "transversal",
+        "aspect_xy_max": 0.5, "description": "Baos transversales de cubierta"
+    },
+    {
+        "swbs": "400", "codigo": "400-04", "nombre": "Brazolas / Escotilla",
+        "orientacion": ["vertical"], "z_norm": (0.75, 1.0),
+        "area_min": 0.3, "area_max": 10,
+        "description": "Brazolas de escotilla, marcos de escotilla"
+    },
+    {
+        "swbs": "400", "codigo": "400-05", "nombre": "Tapa de Escotilla",
+        "orientacion": ["horizontal"], "z_norm": (0.85, 1.0),
+        "area_min": 0.5, "area_max": 30,
+        "description": "Tapas de escotilla, paneles de cubierta removibles"
+    },
+    {
+        "swbs": "400", "codigo": "400-06", "nombre": "Superestructura / Caseta",
+        "orientacion": ["vertical", "horizontal"], "z_norm": (0.9, 1.0),
+        "area_min": 2, "area_max": 100,
+        "description": "Caseta de gobierno, superestructura, habilitación"
+    },
+    {
+        "swbs": "400", "codigo": "400-07", "nombre": "Borda / Regala",
+        "orientacion": ["vertical"], "z_norm": (0.8, 1.0),
+        "area_min": 1, "area_max": 30, "extension": "longitudinal",
+        "aspect_xy_min": 4, "description": "Borda, regala, pasamanos, balaustrada"
+    },
+    # ── GRUPO 500 — SISTEMAS AUXILIARES ──────────────────────────────────
+    {
+        "swbs": "500", "codigo": "500-01", "nombre": "Tanque de Combustible",
+        "orientacion": ["horizontal", "vertical"], "z_norm": (0.0, 0.4),
+        "area_min": 1, "area_max": 50,
+        "description": "Tanques de combustible, tanques de servicio diario"
+    },
+    {
+        "swbs": "500", "codigo": "500-02", "nombre": "Tanque de Agua Dulce",
+        "orientacion": ["horizontal", "vertical"], "z_norm": (0.0, 0.5),
+        "area_min": 0.5, "area_max": 30,
+        "description": "Tanques de agua dulce, pique de proa"
+    },
+    {
+        "swbs": "500", "codigo": "500-03", "nombre": "Tanque de Lastre",
+        "orientacion": ["horizontal", "vertical"], "z_norm": (0.0, 0.3),
+        "area_min": 2, "area_max": 100,
+        "description": "Tanques de lastre, piques, doble fondo de lastre"
+    },
+    # ── GRUPO 600 — EQUIPOS DE CUBIERTA ──────────────────────────────────
+    {
+        "swbs": "600", "codigo": "600-01", "nombre": "Cabrestante / Molinete",
+        "orientacion": ["curved", "horizontal"], "z_norm": (0.85, 1.0),
+        "area_min": 0.1, "area_max": 3,
+        "posicion_x": "proa", "description": "Molinete de ancla, cabrestante, chigre"
+    },
+    {
+        "swbs": "600", "codigo": "600-02", "nombre": "Ancla / Escobén",
+        "orientacion": ["curved"], "z_norm": (0.5, 1.0),
+        "area_min": 0.01, "area_max": 1,
+        "posicion_x": "proa", "description": "Ancla, escobén, caja de cadenas"
+    },
+    {
+        "swbs": "600", "codigo": "600-03", "nombre": "Bita / Cornamusa",
+        "orientacion": ["vertical"], "z_norm": (0.85, 1.0),
+        "area_min": 0.01, "area_max": 0.3,
+        "description": "Bitas de amarre, cornamusas, guías de cabo"
+    },
+    {
+        "swbs": "600", "codigo": "600-04", "nombre": "Mástil / Palo",
+        "orientacion": ["vertical"], "z_norm": (0.8, 1.0),
+        "area_min": 0.05, "area_max": 2, "extension": "vertical",
+        "aspect_xy_max": 0.3, "description": "Mástil principal, mástil de carga, palo"
+    },
+    {
+        "swbs": "600", "codigo": "600-05", "nombre": "Grúa / Pórtico",
+        "orientacion": ["vertical", "curved"], "z_norm": (0.8, 1.0),
+        "area_min": 0.5, "area_max": 20,
+        "description": "Grúa de carga, pórtico, pluma de carga"
+    },
+]
+
+def preselect_candidates(cluster):
+    """
+    Filtra la DB naval y retorna los 5 componentes más probables
+    basado en geometría: orientación, área, posición Z normalizada.
+    """
+    orient    = cluster.get("orientation", "unknown")
+    area      = cluster.get("area_m2", 0)
+    centroid  = cluster.get("centroid", [0, 0, 0])
+    bbox      = cluster.get("bbox_approx", {})
+    bx        = bbox.get("x", 0)
+    by        = bbox.get("y", 0)
+    bz        = bbox.get("z", 0)
+
+    # Normalizar Z entre 0 y 1 usando límites aproximados del modelo
+    # Se pasa z_min / z_max del modelo completo si está disponible
+    z_min_model = cluster.get("z_min_model", -6)
+    z_max_model = cluster.get("z_max_model", 2)
+    z_range = max(z_max_model - z_min_model, 0.001)
+    z_norm = (centroid[2] - z_min_model) / z_range
+
+    # Aspect ratio longitudinal/transversal
+    aspect_xy = bx / by if by > 0.001 else 1
+
+    scores = []
+    for comp in NAVAL_SWBS_DB:
+        score = 0
+
+        # Orientación
+        if orient in comp.get("orientacion", []):
+            score += 30
+
+        # Posición Z normalizada
+        z_range_comp = comp.get("z_norm", (0, 1))
+        if z_range_comp[0] <= z_norm <= z_range_comp[1]:
+            score += 25
+
+        # Área
+        a_min = comp.get("area_min", 0)
+        a_max = comp.get("area_max", 9999)
+        if a_min <= area <= a_max:
+            score += 20
+
+        # Extension / aspect
+        ext = comp.get("extension", "")
+        if ext == "longitudinal" and aspect_xy > 2:
+            score += 10
+        elif ext == "transversal" and aspect_xy < 1:
+            score += 10
+
+        scores.append((score, comp))
+
+    scores.sort(key=lambda x: x[0], reverse=True)
+    return [c for _, c in scores[:5]]
+
+
 @app.route('/cluster-names', methods=['POST'])
 def cluster_names():
     """
-    Recibe el JSON de /analyze ya procesado (clusters)
-    y propone nombres SWBS basados en geometría.
-    Esto es una pre-clasificación antes de enviar a ARIA/Groq.
+    Recibe clusters de /analyze-chunk procesados.
+    1. Preselecciona candidatos SWBS por geometría (DB naval).
+    2. Envía a Groq para clasificación semántica final con contexto naval.
+    Retorna proposals con nombre, código SWBS y confianza.
     """
-    data = request.get_json(silent=True) or {}
+    import os, json, urllib.request
+
+    GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
+    data     = request.get_json(silent=True) or {}
     clusters = data.get("clusters", [])
 
-    proposals = []
+    if not clusters:
+        return jsonify({"error": "clusters requeridos"}), 400
+
+    # ── Paso 1: Pre-clasificación geométrica ─────────────────────────────
+    pre_classified = []
     for c in clusters:
-        orient = c.get("orientation", "unknown")
-        area = c.get("area_m2", 0)
-        bbox = c.get("bbox_approx", {})
-        centroid = c.get("centroid", [0,0,0])
-        aspect = bbox.get("x", 1) / bbox.get("z", 1) if bbox.get("z", 0.001) > 0.001 else 1
-
-        # Heurísticas de clasificación geométrica
-        if orient == "horizontal" and area > 10:
-            guess = "cubierta"
-            swbs_hint = "300"
-        elif orient == "horizontal" and area < 5 and centroid[2] < 0:
-            guess = "fondo"
-            swbs_hint = "100"
-        elif orient == "vertical" and aspect > 3:
-            guess = "mamparo_longitudinal"
-            swbs_hint = "200"
-        elif orient == "vertical" and aspect < 1.5:
-            guess = "mamparo_transversal"
-            swbs_hint = "200"
-        elif orient == "curved":
-            guess = "casco"
-            swbs_hint = "100"
-        elif area < 0.5:
-            guess = "elemento_pequeño"
-            swbs_hint = "500"
-        else:
-            guess = "estructura_general"
-            swbs_hint = "100"
-
-        proposals.append({
-            "cluster_id": c["cluster_id"],
-            "geometric_guess": guess,
-            "swbs_hint": swbs_hint,
-            "confidence": "low",  # ARIA debe confirmar con contexto semántico
-            "mesh_names": c["mesh_names"],
-            "area_m2": c["area_m2"],
-            "centroid": c["centroid"]
+        candidates = preselect_candidates(c)
+        pre_classified.append({
+            "cluster_id":  c["cluster_id"],
+            "orientation": c.get("orientation"),
+            "area_m2":     round(c.get("area_m2", 0), 2),
+            "centroid":    c.get("centroid", []),
+            "mesh_count":  c.get("mesh_count", 0),
+            "bbox":        c.get("bbox_approx", {}),
+            "candidates":  [{"codigo": x["codigo"], "nombre": x["nombre"], "swbs": x["swbs"]} for x in candidates],
+            "mesh_names":  c.get("mesh_names", [])[:3],
         })
 
-    return jsonify({"proposals": proposals})
+    # ── Paso 2: Clasificación con Groq ───────────────────────────────────
+    if not GROQ_KEY:
+        # Sin Groq: retornar el candidato #1 como propuesta
+        proposals = [{
+            "cluster_id": p["cluster_id"],
+            "nombre":     p["candidates"][0]["nombre"] if p["candidates"] else "Componente",
+            "codigo":     p["candidates"][0]["codigo"] if p["candidates"] else "100-01",
+            "swbs":       p["candidates"][0]["swbs"]   if p["candidates"] else "100",
+            "confianza":  "media",
+            "mesh_names": p["mesh_names"],
+            "area_m2":    p["area_m2"],
+        } for p in pre_classified]
+        return jsonify({"proposals": proposals})
+
+    # Construir prompt para Groq
+    prompt_data = json.dumps(pre_classified, ensure_ascii=False)
+    system_prompt = """Eres ARIA, asistente de ingeniería naval experta en clasificación SWBS (Ship Work Breakdown Structure).
+Recibirás clusters de geometría 3D de un buque con candidatos preseleccionados.
+Para cada cluster debes elegir el candidato más apropiado o proponer uno mejor si ninguno encaja.
+
+CRITERIOS DE DECISIÓN:
+- Usa orientación, área, posición Z normalizada (0=fondo, 1=cubierta), y aspect ratio.
+- Considera la posición relativa entre clusters (elementos cercanos suelen ser del mismo sistema).
+- Los mesh_names pueden dar pistas (GLTF_N no ayuda, pero "timón", "rudder", "helm" sí).
+- Prioriza coherencia estructural del buque completo.
+
+RESPONDE ÚNICAMENTE con JSON válido, sin texto adicional:
+{
+  "proposals": [
+    {
+      "cluster_id": <int>,
+      "nombre": "<nombre en español>",
+      "codigo": "<codigo SWBS como 100-01>",
+      "swbs": "<grupo como 100>",
+      "confianza": "<alta|media|baja>"
+    }
+  ]
+}"""
+
+    try:
+        groq_body = json.dumps({
+            "model": "llama-3.3-70b-versatile",
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": f"Clasifica estos {len(pre_classified)} clusters:\n{prompt_data}"}
+            ],
+            "max_tokens": 2000,
+            "temperature": 0.2
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            "https://api.groq.com/openai/v1/chat/completions",
+            data=groq_body,
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": f"Bearer {GROQ_KEY}"
+            }
+        )
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            groq_data = json.loads(resp.read())
+
+        content = groq_data["choices"][0]["message"]["content"]
+        # Limpiar markdown si viene con ```json
+        content = content.strip()
+        if content.startswith("```"):
+            content = content.split("```")[1]
+            if content.startswith("json"):
+                content = content[4:]
+        result = json.loads(content.strip())
+
+        # Mezclar mesh_names y area del pre-classified
+        id_map = {p["cluster_id"]: p for p in pre_classified}
+        for prop in result.get("proposals", []):
+            cid = prop.get("cluster_id")
+            if cid in id_map:
+                prop["mesh_names"] = id_map[cid]["mesh_names"]
+                prop["area_m2"]    = id_map[cid]["area_m2"]
+
+        return jsonify(result)
+
+    except Exception as e:
+        # Fallback a pre-clasificación geométrica
+        proposals = [{
+            "cluster_id": p["cluster_id"],
+            "nombre":     p["candidates"][0]["nombre"] if p["candidates"] else "Componente",
+            "codigo":     p["candidates"][0]["codigo"] if p["candidates"] else "100-01",
+            "swbs":       p["candidates"][0]["swbs"]   if p["candidates"] else "100",
+            "confianza":  "baja",
+            "mesh_names": p["mesh_names"],
+            "area_m2":    p["area_m2"],
+            "error":      str(e)
+        } for p in pre_classified]
+        return jsonify({"proposals": proposals})
 
 
 @app.route('/analyze-chunk', methods=['POST'])
